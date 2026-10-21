@@ -1,110 +1,165 @@
 # Escrita de Libras
 
-App para pesquisar sinais de **Libras** e ver o desenho em **SignWriting**,
-usando o dicionário público brasileiro do [SignPuddle](https://signpuddle.com/).
+App Flutter (Dart 3) para pesquisa e estudo de sinais de **Libras (Língua Brasileira de Sinais)** com desenho em **SignWriting**, utilizando o vocabulário público brasileiro consolidado do [SignPuddle 3](https://signpuddle.com/).
 
-Você digita uma palavra em português, o app encontra o termo num **SQLite
-local** e busca o desenho (SVG) no servidor do SignPuddle na primeira vez.
-Depois, o desenho fica em cache. Também dá para salvar **metadados próprios**
-(título, termos, tags e observações) em cima de qualquer sinal e criar **sinais
-manuais**.
+O aplicativo funciona de forma **100% offline**: você digita uma palavra em português, o termo é localizado instantaneamente em um **SQLite local**, e o sinal em SignWriting é desenhado na tela de forma vetorial nativa e acelerada por GPU através das fontes TrueType oficiais do **Sutton SignWriting**, eliminando qualquer dependência de download de imagens ou conexão de rede.
+
+---
 
 ## Funcionalidades
 
-- **Busca local** em ~25.611 sinais e ~39.802 termos (dicionário
-  `bzs-BR-dictionary-public`), com acentos/tolerância de pontuação, prefixo,
-  FTS5 e substring.
-- **Desenho SignWriting** baixado sob demanda do SignPuddle e guardado em
-  cache (memória → blob opcional → arquivo → rede).
-- **Metadados pessoais** por sinal: título, termos extras, tags e observações —
-  tudo entra na busca e fica só no aparelho.
-- **Sinais manuais**: crie um sinal colando o SWU (Unicode) ou FSW (ASCII), com
-  prévia ao vivo.
-- **Favoritos** e **buscas recentes**.
-- **Exportar/importar** seus dados (anotações, favoritos e sinais manuais) em
-  JSON, pela área de transferência.
-- Tema claro/escuro.
+- **Exclusivo para Libras**: Dicionário restrito e blindado para a Língua Brasileira de Sinais (`bzs-BR-dictionary-public`), com termos e expressões em português.
+- **Busca Local Ultra-Rápida**: Consulta em ~25.611 sinais e ~39.802 termos, com tolerância a acentos, busca por prefixo, índice FTS5 (busca textual completa) e substring.
+- **Renderização Nativa por Fontes (100% Offline)**: Desenho imediato no Canvas do Flutter utilizando as fontes `SuttonSignWritingLine` e `SuttonSignWritingFill`. Zero consumo de dados móveis e zero latência.
+- **Modo Escuro / Claro Dinâmico**: Os traços e o preenchimento dos sinais adaptam-se automaticamente ao tema do sistema (ex.: traços brancos nítidos no tema escuro e traços escuros no tema claro).
+- **Metadados Pessoais por Sinal**: Adicione anotações, tags e termos complementares em qualquer sinal. Seus dados entram na busca e ficam salvos em um banco de dados separado.
+- **Sinais Manuais com Prévia ao Vivo**: Cadastre novos sinais colando códigos em **SWU** (Unicode) ou **FSW** (ASCII), com prévia imediata desenhada na hora.
+- **Favoritos e Histórico de Buscas**.
+- **Backup dos Seus Dados**: Exporte e importe suas anotações, favoritos e sinais manuais em formato JSON via área de transferência.
 
-## Plataformas
+---
 
-- **Android**: completo.
-- **Linux** (desktop): completo (requer `libsqlite3`).
-- **Web**: a busca usa SQLite local e **não** funciona no navegador; o app
-  mostra uma mensagem orientando a usar Android/Linux. O mesmo código compila.
+## Arquitetura de Armazenamento e Desenho
 
-## Estrutura
+```mermaid
+flowchart TD
+    subgraph SQLite ["Bancos de Dados Locais"]
+        BaseDB[("assets/signpuddle.db (~10 MB)\nBanco Base Somente Leitura\n(25k sinais + FTS5)")]
+        UserDB[("user_data.db\nBanco do Usuário Gravável\n(Anotações, Favoritos, Sinais)")]
+    end
+
+    subgraph Core ["Processamento em Dart"]
+        BaseDB & UserDB --> Repo["DictionaryRepository"]
+        Repo --> Parser["SwuParser (SWU & FSW)"]
+    end
+
+    subgraph Render ["Renderização Nativa"]
+        Parser --> Canvas["SignWritingCanvas (CustomPainter)"]
+        Fonts["assets/fonts/\nSuttonSignWritingLine.ttf\nSuttonSignWritingFill.ttf"] --> Canvas
+        Canvas --> Screen["Exibição Imediata na Tela (GPU)"]
+    end
+```
+
+### Arquitetura de Banco Duplo
+1. **Banco Base (`assets/signpuddle.db`, ~10 MB)**: Contém o dicionário compilado pelo script Python. É aberto em modo `readOnly: true`. Uma atualização futura deste banco **nunca sobrescreve dados do usuário**.
+2. **Banco do Usuário (`user_data.db`)**: Armazena as personalizações locais, garantindo total privacidade e persistência.
+
+---
+
+## Estrutura do Projeto
 
 ```
 lib/
-  core/        normalização, URLs, formato, info do app
-  data/        SQLite base (somente leitura) + banco do usuário + repositório
-  services/    serviço de imagem (cache + rede)
-  state/       estado global (ChangeNotifier)
-  ui/          telas e widgets
+  main.dart                      Entrypoint + inicialização desktop FFI
+  app.dart                       MaterialApp, splash e rotas
+  core/
+    app_info.dart                Identificadores do dicionário e versões
+    swu_parser.dart              Parser de SWU (Unicode) e FSW (ASCII)
+    text_normalizer.dart         Normalização de busca e query FTS5
+    format.dart                  Formatadores de data, contagem e bytes
+    sign_image_url.dart          URLs auxiliares do SignPuddle
+    sign_svg.dart                Normalizador de SVG legado (fallback)
+  data/
+    models.dart                  Modelos de dados (SignEntry, SignNote, SignKind)
+    base_database.dart           SQLite base (read-only) + motor de busca
+    user_database.dart           SQLite do usuário (anotações, favoritos, manual)
+    dictionary_repository.dart   Repositório unificado (base + usuário)
+  services/
+    sign_image_service.dart      Serviço de fallback para imagens externas
+  state/
+    app_state.dart               Gerenciador de estado global (ChangeNotifier)
+  ui/
+    theme.dart                   Material 3 (claro e escuro)
+    home_screen.dart             Busca, sugestões, histórico e listagem
+    sign_detail_screen.dart      Detalhes do sinal, zoom e anotações
+    favorites_screen.dart        Lista de sinais favoritos
+    settings_screen.dart         Gerenciamento de dados, tema e sobre
+    custom_sign_screen.dart      Criação/edição de sinais manuais
+    widgets/
+      sign_writing_canvas.dart   Pintura nativa de SignWriting via fontes TTF
+      sign_writing_image.dart    Container do sinal com seleção canvas/fallback
+      sign_card.dart             Card da lista de resultados
+      section_card.dart          Cards de seções informativas
+      note_editor_sheet.dart     Editor de anotações (bottom sheet)
+
 tools/signpuddle/
-  fetch_dictionary.py   baixa o JSON do SignPuddle
-  build_sqlite.py       gera assets/signpuddle.db (pesquisável)
-  download_images.py    espelha SVGs (opcional) e/ou embute no banco
-  sync.py               faz fetch + build de uma vez
-  list_dictionaries.py  lista os dicionários públicos
+  build_sqlite.py                Gera assets/signpuddle.db a partir do JSON do SP3
+  fetch_dictionary.py            Baixa o JSON do SignPuddle 3
+  sync.py                        Executa fetch + build em lote
+  list_dictionaries.py           Lista dicionários da API pública
+  download_images.py             Downloader opcional de SVGs para o banco
+  normalize.py                   Mesma regra de normalização de termos usada no Dart
+  tests/                         Testes unitários do tooling Python
+
 assets/
-  signpuddle.db         banco gerado (asset do app)
-  sample_sign.svg       exemplo de desenho para a tela inicial
+  fonts/                         Fontes TTF (SuttonSignWritingLine e Fill)
+  signpuddle.db                  Dicionário base pré-compilado
+  sample_sign.svg                Amostra de sinal para demonstração
 ```
 
-## Como rodar o app
+---
+
+## Como Executar
+
+### 1. Aplicativo Flutter (Android / Linux)
 
 ```bash
+# Obter dependências
 flutter pub get
-flutter run              # Android/Linux
-flutter test             # testes
+
+# Rodar no dispositivo/emulador conectado
+flutter run
+
+# Executar testes
+flutter test
+
+# Análise estática de código
 flutter analyze
 ```
 
-O banco `assets/signpuddle.db` já vem pronto. Para regerá-lo (ou atualizar do
-SignPuddle):
+### 2. Gerar / Atualizar o Banco SQLite (Python)
+
+O banco `assets/signpuddle.db` já está incluído e pronto para uso no repositório. Caso queira sincronizar com as atualizações mais recentes do SignPuddle 3:
 
 ```bash
 pip install -r tools/signpuddle/requirements.txt
 python -m tools.signpuddle.sync
 ```
 
-Isso baixa o JSON (~20 MB) para `tools/signpuddle/data/raw/` e reconstrói o
-SQLite. O diretório `tools/signpuddle/data/` fica fora do git (ver
-`.gitignore`); apenas o `.db` final é versionado como asset.
+*(O JSON baixado (~20 MB) fica isolado em `tools/signpuddle/data/raw/` e é ignorado pelo Git; apenas o `.db` otimizado final é versionado).*
 
-## Imagens offline (opcional)
-
-Por padrão, os desenhos são buscados no SignPuddle sob demanda. Para ter tudo
-embutido no banco (uso totalmente offline, à custa de ~50 MB a mais):
-
-```bash
-python -m tools.signpuddle.download_images --all --into-db
-```
-
-O app detecta a tabela `sign_images` e usa o blob antes de ir para a rede.
+---
 
 ## Testes
 
+O projeto conta com suite de testes automatizados completa:
+
 ```bash
-# Dart/Flutter
+# Testes do Flutter (26 testes unitários e de widgets)
 flutter test
 
-# Python (normalização e geração do banco)
+# Testes do Tooling Python (7 testes de normalização e SQLite)
 python -m unittest discover -s tools/signpuddle/tests -v
 ```
 
-## Dados e atribuição
+---
 
-Os sinais e metadados vêm do dicionário público
-`bzs-BR-dictionary-public`, mantido pela comunidade do SignPuddle (SignWriting
-de Valerie Sutton, software de Steve Slevinski). Cada entrada pertence aos
-colaboradores indicados no campo `source`. Este projeto apenas pesquisa e
-desenha os sinais; não se responsabiliza pelo conteúdo.
+## Plataformas Suportadas
+
+- **Android**: Suporte completo (validado em hardware real).
+- **Linux Desktop**: Suporte completo (requer `libsqlite3`).
+- **Web**: Compila para demonstração de interface, exibindo aviso informativo sobre a necessidade de SQLite local no dispositivo.
+
+---
+
+## Dados e Atribuição
+
+Os sinais e metadados base têm origem no dicionário público `bzs-BR-dictionary-public` do projeto SignPuddle, idealizado por **Valerie Sutton** (SignWriting) e desenvolvido por **Steve Slevinski**. As fontes TrueType pertencem ao projeto oficial `@sutton-signwriting/font-ttf`.
+
+Cada verbete pertence aos colaboradores listados no campo de fonte (`source`). Este projeto não se responsabiliza pelo conteúdo linguístico, funcionando como ferramenta educacional para estudo de Libras.
+
+---
 
 ## Licença
 
-Este software é livre, sob [GPL-3.0](LICENSE). Os dados do SignPuddle seguem as
-condições do próprio SignPuddle/colaboradores.
-
-Desenvolvido para estudo de Libras. Use por sua conta e risco.
+Este software é livre e licenciado sob a [GPL-3.0](LICENSE).

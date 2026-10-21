@@ -1,7 +1,7 @@
 # AGENTS.md — Escrita de Libras
 
 App Flutter (Dart 3) + ferramentas Python que pesquisa sinais de Libras num
-SQLite local e desenha o SignWriting via SignPuddle 3.
+SQLite local e desenha o SignWriting nativamente via fontes TrueType oficiais.
 
 ## Como funciona
 
@@ -11,9 +11,14 @@ SQLite local e desenha o SignWriting via SignPuddle 3.
 - O banco do usuário (`user_data.db`) é **separado** e gravável: anotações,
   favoritos, sinais manuais e buscas recentes. Uma atualização do banco base
   nunca apaga dados do usuário.
-- A imagem de cada sinal é um SVG servido por
-  `https://signpuddle.com/server/{swu|fsw}/svg/{código}`. O app usa memória →
-  blob (se `sign_images` existir) → arquivo em cache → rede.
+- **Renderização Nativa**: O app renderiza o SignWriting diretamente no Canvas
+  via `CustomPainter` (`lib/ui/widgets/sign_writing_canvas.dart`) usando as
+  fontes `SuttonSignWritingLine.ttf` e `SuttonSignWritingFill.ttf` em
+  `assets/fonts/`. O código SWU/FSW é decodificado localmente por
+  `lib/core/swu_parser.dart`.
+- **Fallback para SVG/Rede**: Apenas caso o sinal não contenha código visual
+  SWU/FSW diretamente parseável, o app recorre ao `SignImageService`
+  (memória → blob no banco → arquivo em cache → rede).
 
 ## Comandos
 
@@ -32,6 +37,9 @@ python -m unittest discover -s tools/signpuddle/tests -v
 
 ## Regras importantes
 
+- **Exclusividade para Libras**: O projeto é estritamente limitado ao
+  dicionário de Libras (`bzs-BR-dictionary-public`). Nenhuma outra língua de
+  sinais deve ser misturada nos scrapes ou banco base.
 - **Normalização**: `lib/core/text_normalizer.dart` e
   `tools/signpuddle/normalize.py` implementam a MESMA regra (NFKD sem acentos,
   minúsculas, `@`→`o`, não-alfanumérico→espaço, colapsar espaços). O banco
