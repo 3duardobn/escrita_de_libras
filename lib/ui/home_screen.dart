@@ -5,7 +5,6 @@ import '../core/app_info.dart';
 import '../core/format.dart';
 import '../data/models.dart';
 import '../state/app_state.dart';
-import 'custom_sign_screen.dart';
 import 'favorites_screen.dart';
 import 'settings_screen.dart';
 import 'sign_detail_screen.dart';
@@ -83,16 +82,6 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  Future<void> _openCustomSign() async {
-    final entry = await Navigator.of(context).push<SignEntry>(
-      MaterialPageRoute(builder: (_) => const CustomSignScreen()),
-    );
-    if (entry != null && mounted) {
-      _controller.text = entry.terms.isNotEmpty ? entry.terms.first : entry.title;
-      await _submit();
-    }
-  }
-
   void _openFavorites() {
     Navigator.of(context).push(
       MaterialPageRoute(builder: (_) => const FavoritesScreen()),
@@ -156,11 +145,6 @@ class _HomeScreenState extends State<HomeScreen> {
               const SizedBox(width: 4),
             ],
           ),
-          floatingActionButton: FloatingActionButton.extended(
-            onPressed: _openCustomSign,
-            icon: const Icon(Icons.add_rounded),
-            label: const Text('Novo sinal'),
-          ),
           body: Center(
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 880),
@@ -208,7 +192,6 @@ class _HomeScreenState extends State<HomeScreen> {
         onSuggestion: _submit,
         onRandom: _openRandom,
         randomLoading: _randomLoading,
-        onNewSign: _openCustomSign,
         onClearRecent: _state.clearRecentSearches,
         onRemoveRecent: _state.removeRecent,
       );
@@ -218,25 +201,11 @@ class _HomeScreenState extends State<HomeScreen> {
       return EmptyState(
         icon: Icons.search_off_rounded,
         title: 'Nenhum sinal para “${_state.lastQuery}”',
-        message:
-            'Tente uma palavra mais curta, o singular, ou cadastre um sinal '
-            'manualmente com o SignWriting que você já tem.',
-        action: Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          alignment: WrapAlignment.center,
-          children: [
-            OutlinedButton.icon(
-              onPressed: _clear,
-              icon: const Icon(Icons.close_rounded),
-              label: const Text('Limpar busca'),
-            ),
-            FilledButton.icon(
-              onPressed: _openCustomSign,
-              icon: const Icon(Icons.add_rounded),
-              label: const Text('Criar sinal'),
-            ),
-          ],
+        message: 'Tente uma palavra mais curta ou o singular.',
+        action: OutlinedButton.icon(
+          onPressed: _clear,
+          icon: const Icon(Icons.close_rounded),
+          label: const Text('Limpar busca'),
         ),
       );
     }
@@ -378,7 +347,6 @@ class _WelcomeView extends StatelessWidget {
     required this.onSuggestion,
     required this.onRandom,
     required this.randomLoading,
-    required this.onNewSign,
     required this.onClearRecent,
     required this.onRemoveRecent,
   });
@@ -387,7 +355,6 @@ class _WelcomeView extends StatelessWidget {
   final Future<void> Function([String?]) onSuggestion;
   final Future<void> Function() onRandom;
   final bool randomLoading;
-  final Future<void> Function() onNewSign;
   final Future<void> Function() onClearRecent;
   final void Function(String) onRemoveRecent;
 
@@ -453,32 +420,21 @@ class _WelcomeView extends StatelessWidget {
                   ],
                 ),
                 const SizedBox(height: 18),
-                Row(
-                  children: [
-                    Expanded(
-                      child: FilledButton.icon(
-                        onPressed: randomLoading ? null : onRandom,
-                        icon: randomLoading
-                            ? const SizedBox(
-                                width: 16,
-                                height: 16,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                ),
-                              )
-                            : const Icon(Icons.casino_outlined),
-                        label: const Text('Sinal aleatório'),
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        onPressed: onNewSign,
-                        icon: const Icon(Icons.add_rounded),
-                        label: const Text('Criar sinal'),
-                      ),
-                    ),
-                  ],
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton.tonalIcon(
+                    onPressed: randomLoading ? null : onRandom,
+                    icon: randomLoading
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                            ),
+                          )
+                        : const Icon(Icons.casino_outlined),
+                    label: const Text('Sinal aleatório'),
+                  ),
                 ),
               ],
             ),

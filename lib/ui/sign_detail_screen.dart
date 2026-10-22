@@ -3,9 +3,9 @@ import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/format.dart';
+import '../../core/swu_parser.dart';
 import '../../data/models.dart';
 import '../../state/app_state.dart';
-import 'custom_sign_screen.dart';
 import 'theme.dart';
 import 'widgets/note_editor_sheet.dart';
 import 'widgets/section_card.dart';
@@ -25,6 +25,7 @@ class _SignDetailScreenState extends State<SignDetailScreen> {
   late SignEntry _entry;
   SignNote? _note;
   bool _noteLoaded = false;
+  bool _isInteractingWithSign = false;
 
   @override
   void initState() {
@@ -115,43 +116,56 @@ class _SignDetailScreenState extends State<SignDetailScreen> {
     setState(() => _note = note.isEmpty ? null : note);
   }
 
-  Future<void> _editCustom() async {
-    final updated = await Navigator.of(context).push<SignEntry>(
-      MaterialPageRoute(
-        builder: (_) => CustomSignScreen(existing: _entry),
-      ),
-    );
-    if (updated == null || !mounted) return;
-    setState(() => _entry = updated);
-  }
-
-  Future<void> _deleteCustom() async {
-    final confirmed = await showDialog<bool>(
+  void _openFullscreenSign() {
+    showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Excluir sinal manual?'),
-        content: const Text(
-          'O sinal e a anotação serão apagados deste aparelho. '
-          'Essa ação não pode ser desfeita.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancelar'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, true),
-            style: FilledButton.styleFrom(
-              backgroundColor: Theme.of(context).colorScheme.error,
+      useSafeArea: false,
+      builder: (context) => Dialog.fullscreen(
+        backgroundColor: Theme.of(context).brightness == Brightness.dark
+            ? const Color(0xFF111418)
+            : const Color(0xFFF9F7F4),
+        child: Stack(
+          children: [
+            Center(
+              child: SizedBox(
+                width: MediaQuery.of(context).size.width,
+                height: MediaQuery.of(context).size.height,
+                child: SignWritingImage(
+                  entry: _entry,
+                  height: MediaQuery.of(context).size.height,
+                  interactive: true,
+                  padding: const EdgeInsets.all(48),
+                ),
+              ),
             ),
-            child: const Text('Excluir'),
-          ),
-        ],
+            Positioned(
+              top: MediaQuery.of(context).padding.top + 12,
+              left: 16,
+              child: IconButton.filledTonal(
+                onPressed: () => Navigator.of(context).pop(),
+                icon: const Icon(Icons.close_rounded),
+                tooltip: 'Fechar',
+              ),
+            ),
+            Positioned(
+              top: MediaQuery.of(context).padding.top + 16,
+              right: 20,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  'Arraste ou use pinça para zoom',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
-    if (confirmed != true) return;
-    await _state.deleteCustomSign(_entry);
-    if (mounted) Navigator.of(context).pop();
   }
 
   @override
@@ -178,27 +192,17 @@ class _SignDetailScreenState extends State<SignDetailScreen> {
                   switch (value) {
                     case 'note':
                       _editNote();
-                    case 'edit':
-                      _editCustom();
                     case 'copy':
                       _copySign();
                     case 'open':
                       if (_entry.entryUrl != null) _openUrl(_entry.entryUrl!);
-                    case 'delete':
-                      _deleteCustom();
                   }
                 },
                 itemBuilder: (context) => [
-                  if (!_entry.isCustom)
-                    const PopupMenuItem(
-                      value: 'note',
-                      child: Text('Editar meus metadados'),
-                    ),
-                  if (_entry.isCustom)
-                    const PopupMenuItem(
-                      value: 'edit',
-                      child: Text('Editar sinal manual'),
-                    ),
+                  const PopupMenuItem(
+                    value: 'note',
+                    child: Text('Editar meus metadados'),
+                  ),
                   const PopupMenuItem(
                     value: 'copy',
                     child: Text('Copiar SignWriting'),
@@ -208,28 +212,51 @@ class _SignDetailScreenState extends State<SignDetailScreen> {
                       value: 'open',
                       child: Text('Abrir no SignPuddle'),
                     ),
-                  if (_entry.isCustom) ...[
-                    const PopupMenuDivider(),
-                    PopupMenuItem(
-                      value: 'delete',
-                      child: Text(
-                        'Excluir sinal',
-                        style: TextStyle(color: theme.colorScheme.error),
-                      ),
-                    ),
-                  ],
                 ],
               ),
             ],
           ),
           body: ListView(
+            physics: _isInteractingWithSign
+                ? const NeverScrollableScrollPhysics()
+                : const BouncingScrollPhysics(),
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
             children: [
-              SignWritingImage(
-                entry: _entry,
-                height: 340,
-                interactive: true,
-                padding: const EdgeInsets.all(20),
+              Stack(
+                children: [
+                  Listener(
+                    onPointerDown: (_) {
+                      if (!_isInteractingWithSign) {
+                        setState(() => _isInteractingWithSign = true);
+                      }
+                    },
+                    onPointerUp: (_) {
+                      if (_isInteractingWithSign) {
+                        setState(() => _isInteractingWithSign = false);
+                      }
+                    },
+                    onPointerCancel: (_) {
+                      if (_isInteractingWithSign) {
+                        setState(() => _isInteractingWithSign = false);
+                      }
+                    },
+                    child: SignWritingImage(
+                      entry: _entry,
+                      height: 340,
+                      interactive: true,
+                      padding: const EdgeInsets.all(20),
+                    ),
+                  ),
+                  Positioned(
+                    top: 10,
+                    right: 10,
+                    child: IconButton.filledTonal(
+                      onPressed: _openFullscreenSign,
+                      icon: const Icon(Icons.fullscreen_rounded, size: 20),
+                      tooltip: 'Ver em tela cheia (zoom livre)',
+                    ),
+                  ),
+                ],
               ),
               const SizedBox(height: 18),
               Row(
@@ -371,8 +398,8 @@ class _SignDetailScreenState extends State<SignDetailScreen> {
       title: 'Meus metadados',
       icon: Icons.edit_note_rounded,
       action: IconButton(
-        onPressed: isCustom ? _editCustom : _editNote,
-        tooltip: isCustom ? 'Editar sinal manual' : 'Editar metadados',
+        onPressed: _editNote,
+        tooltip: 'Editar metadados',
         icon: const Icon(Icons.edit_outlined, size: 20),
       ),
       child: !_noteLoaded && !isCustom
@@ -385,17 +412,15 @@ class _SignDetailScreenState extends State<SignDetailScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  isCustom
-                      ? 'Adicione uma observação ao seu sinal.'
-                      : 'Dê um título pessoal, acrescente termos, tags ou '
-                            'observações. Tudo entra na busca.',
+                  'Dê um título pessoal, acrescente termos, tags ou '
+                  'observações. Tudo entra na busca.',
                   style: theme.textTheme.bodyMedium,
                 ),
                 const SizedBox(height: 10),
                 TextButton.icon(
-                  onPressed: isCustom ? _editCustom : _editNote,
+                  onPressed: _editNote,
                   icon: const Icon(Icons.add_rounded),
-                  label: Text(isCustom ? 'Editar sinal' : 'Adicionar metadados'),
+                  label: const Text('Adicionar metadados'),
                 ),
               ],
             )
@@ -455,14 +480,41 @@ class _SignDetailScreenState extends State<SignDetailScreen> {
   }
 
   Widget _buildSignPuddleSection(ThemeData theme) {
+    final fswCode = _entry.signKind == SignKind.fsw
+        ? _entry.sign
+        : SwuParser.swuToFsw(_entry.sign);
+    final isSwu = _entry.signKind == SignKind.swu;
+
     return SectionCard(
       title: 'Dados do SignPuddle',
       icon: Icons.data_object_rounded,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('SignWriting (${_entry.signKind == SignKind.swu ? 'SWU' : 'FSW'})',
-              style: theme.textTheme.labelMedium),
+          Row(
+            children: [
+              Text(
+                'Código Formal SignWriting (FSW)',
+                style: theme.textTheme.labelMedium,
+              ),
+              const Spacer(),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.primaryContainer,
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Text(
+                  'ASCII',
+                  style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                    color: theme.colorScheme.onPrimaryContainer,
+                  ),
+                ),
+              ),
+            ],
+          ),
           const SizedBox(height: 6),
           Container(
             width: double.infinity,
@@ -472,13 +524,57 @@ class _SignDetailScreenState extends State<SignDetailScreen> {
               borderRadius: BorderRadius.circular(10),
             ),
             child: SelectableText(
-              _entry.sign,
+              fswCode.isNotEmpty ? fswCode : _entry.sign,
               maxLines: 5,
               style: theme.textTheme.bodySmall?.copyWith(
                 fontFamily: 'monospace',
                 fontSize: 12,
               ),
             ),
+          ),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 6,
+            children: [
+              OutlinedButton.icon(
+                onPressed: () {
+                  Clipboard.setData(ClipboardData(
+                    text: fswCode.isNotEmpty ? fswCode : _entry.sign,
+                  ));
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Código FSW (ASCII) copiado!'),
+                      duration: Duration(seconds: 2),
+                    ),
+                  );
+                },
+                icon: const Icon(Icons.copy_rounded, size: 15),
+                label: const Text('Copiar FSW'),
+                style: OutlinedButton.styleFrom(
+                  visualDensity: VisualDensity.compact,
+                  padding: const EdgeInsets.symmetric(horizontal: 10),
+                ),
+              ),
+              if (isSwu)
+                TextButton.icon(
+                  onPressed: () {
+                    Clipboard.setData(ClipboardData(text: _entry.sign));
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Código SWU (Unicode) copiado!'),
+                        duration: Duration(seconds: 2),
+                      ),
+                    );
+                  },
+                  icon: const Icon(Icons.code_rounded, size: 15),
+                  label: const Text('Copiar SWU'),
+                  style: TextButton.styleFrom(
+                    visualDensity: VisualDensity.compact,
+                    padding: const EdgeInsets.symmetric(horizontal: 10),
+                  ),
+                ),
+            ],
           ),
           const SizedBox(height: 10),
           if (!_entry.isCustom) ...[

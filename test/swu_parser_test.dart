@@ -43,7 +43,7 @@ void main() {
       expect(layout.height, greaterThanOrEqualTo(50));
     });
 
-    test('parseia frase composta com múltiplos sinais (SignText de "brasil")', () {
+    test('parseia frase composta com múltiplos sinais em coluna vertical (SignText de "brasil")', () {
       // Entrada real do banco SQLite para o sinal 22290 ("brasil"), que contém 5 palavras
       const swuBrasilFrase =
           '𝠃𝥀𝤩\u{4005a}𝣩𝣤\u{40052}𝤈𝣤\u{47715}𝤩𝣯\u{476e3}𝤞𝤎\u{461e1}𝤂𝤝\u{476fb}𝣍𝤍\u{47717}𝣍𝣯 '
@@ -58,14 +58,24 @@ void main() {
       expect(layout.isMultiSign, isTrue);
       expect(layout.spatials.length, 26);
 
-      // As palavras não estão sobrepostas: cada palavra subsequente é deslocada horizontalmente
-      expect(layout.width, greaterThan(400));
-      expect(layout.aspectRatio, greaterThan(3.0));
+      // Sinais organizados em coluna vertical canônica (top-to-bottom)
+      expect(layout.height, greaterThan(400));
+      expect(layout.width, lessThan(160));
 
-      // O último símbolo da última palavra está bem à direita do primeiro símbolo
-      final firstX = layout.spatials.first.x;
-      final lastX = layout.spatials.last.x;
-      expect(lastX, greaterThan(firstX + 300));
+      // O último símbolo da última palavra está verticalmente abaixo do primeiro
+      final firstY = layout.spatials.first.y;
+      final lastY = layout.spatials.last.y;
+      expect(lastY, greaterThan(firstY + 300));
+    });
+
+    test('swuToFsw converte SWU para FSW ASCII legível sem caracteres especiais/quadrados', () {
+      const swuRato = '𝠀񌀅񀳡񆉁񆤁𝠃𝤘𝤧񌀅𝣴𝣵񆇡𝤀𝤜񀳡𝣢𝤋񆱵𝣒𝤀';
+      final fsw = SwuParser.swuToFsw(swuRato);
+      expect(fsw, isNotEmpty);
+      expect(fsw.startsWith('M518x533'), isTrue);
+      expect(fsw.contains('S30004482x483'), isTrue);
+      // Garantir que é puramente ASCII (sem caracteres que causem "tofu" / quadrados)
+      expect(RegExp(r'^[\x20-\x7E]+$').hasMatch(fsw), isTrue);
     });
 
     test('parseia FSW em formato ASCII', () {

@@ -1,4 +1,3 @@
-import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
@@ -90,11 +89,6 @@ class _SignWritingImageState extends State<SignWritingImage> {
     Widget body;
 
     if (_layout != null && !_layout!.isEmpty) {
-      final isWide = _layout!.isMultiSign;
-      final availH = math.max(40.0, widget.height - widget.padding.vertical);
-      final heightScale = availH / _layout!.height;
-      final naturalWidth = math.max(availH, _layout!.width * heightScale);
-
       final canvas = SignWritingCanvas(
         layout: _layout!,
         lineColor: lineColor,
@@ -103,22 +97,15 @@ class _SignWritingImageState extends State<SignWritingImage> {
         padding: EdgeInsets.zero,
       );
 
-      if (isWide && !widget.interactive) {
-        // Frase longa ou sinal composto em lista: rolagem horizontal mantendo glifos nítidos
+      final isMulti = _layout!.isMultiSign;
+
+      if (isMulti && !widget.interactive) {
+        // Mostra o sinal/frase por completo (zoom out) com badge discreto indicativo
         body = Stack(
           children: [
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              physics: const BouncingScrollPhysics(),
-              padding: EdgeInsets.symmetric(
-                horizontal: widget.padding.left,
-                vertical: widget.padding.top,
-              ),
-              child: SizedBox(
-                width: naturalWidth,
-                height: availH,
-                child: canvas,
-              ),
+            Padding(
+              padding: widget.padding,
+              child: canvas,
             ),
             Positioned(
               top: 6,
@@ -140,7 +127,7 @@ class _SignWritingImageState extends State<SignWritingImage> {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Icon(
-                      Icons.swipe_outlined,
+                      Icons.format_line_spacing_rounded,
                       size: 11,
                       color: isDark
                           ? const Color(0xFFA9B0B8)

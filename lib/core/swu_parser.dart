@@ -53,8 +53,8 @@ class SwuSignLayout {
   double get aspectRatio => width / height;
   bool get isEmpty => spatials.isEmpty;
 
-  /// Indica se é uma sequência longa ou sinal composto que requer rolagem horizontal.
-  bool get isMultiSign => wordCount > 1 || aspectRatio > 2.2;
+  /// Indica se é uma sequência longa ou sinal composto em coluna vertical que requer rolagem ou destaque.
+  bool get isMultiSign => wordCount > 1 || height > width * 1.5;
 }
 
 /// Parser para SignWriting em Unicode (SWU) e Formal SignWriting em ASCII (FSW).
@@ -98,6 +98,108 @@ class SwuParser {
     return null;
   }
 
+  /// Converte código SWU (Unicode) em Formal SignWriting (FSW - ASCII padrão).
+  ///
+  /// Se o texto já estiver em FSW ou se for inválido, devolve uma representação limpa.
+  static String swuToFsw(String? text) {
+    if (text == null) return '';
+    final trimmed = text.trim();
+    if (trimmed.isEmpty) return '';
+
+    // Se já estiver em formato FSW ASCII
+    if (_fswPattern.hasMatch(trimmed)) {
+      return trimmed;
+    }
+
+    final tokens = trimmed.split(RegExp(r'\s+'));
+    final fswTokens = <String>[];
+
+    for (final token in tokens) {
+      final tokenFsw = _swuTokenToFsw(token);
+      if (tokenFsw != null && tokenFsw.isNotEmpty) {
+        fswTokens.add(tokenFsw);
+      }
+    }
+
+    return fswTokens.isNotEmpty ? fswTokens.join(' ') : trimmed;
+  }
+
+  static String? _swuTokenToFsw(String token) {
+    final runes = token.runes.toList(growable: false);
+    if (runes.isEmpty) return null;
+
+    var boxIndex = -1;
+    for (var i = 0; i < runes.length; i++) {
+      final r = runes[i];
+      if (r >= _boxMin && r <= _boxMax) {
+        boxIndex = i;
+        break;
+      }
+    }
+
+    String boxType = 'M';
+    int maxX = 500;
+    int maxY = 500;
+    int spatialsStart = 0;
+
+    if (boxIndex != -1) {
+      final boxRune = runes[boxIndex];
+      switch (boxRune) {
+        case 0x1D801:
+          boxType = 'B';
+          break;
+        case 0x1D802:
+          boxType = 'L';
+          break;
+        case 0x1D803:
+          boxType = 'M';
+          break;
+        case 0x1D804:
+          boxType = 'R';
+          break;
+        default:
+          boxType = 'M';
+      }
+
+      if (boxIndex + 2 < runes.length) {
+        maxX = _swuCoord(runes[boxIndex + 1]);
+        maxY = _swuCoord(runes[boxIndex + 2]);
+        spatialsStart = boxIndex + 3;
+      }
+    }
+
+    final buffer = StringBuffer()..write('$boxType${maxX}x$maxY');
+    var spatialCount = 0;
+
+    var i = spatialsStart;
+    while (i < runes.length) {
+      final r = runes[i];
+      if (r >= _symbolMin && r <= _symbolMax && i + 2 < runes.length) {
+        final symbolId = r - 0x40000;
+        final x = _swuCoord(runes[i + 1]);
+        final y = _swuCoord(runes[i + 2]);
+
+        final symKey = _symbolIdToFswKey(symbolId);
+        buffer.write('$symKey${x}x$y');
+        spatialCount++;
+        i += 3;
+        continue;
+      }
+      i++;
+    }
+
+    return spatialCount > 0 ? buffer.toString() : null;
+  }
+
+  static String _symbolIdToFswKey(int symbolId) {
+    var temp = symbolId - 1;
+    final p3 = temp % 16;
+    temp ~/= 16;
+    final p2 = temp % 6;
+    final p1 = 256 + (temp ~/ 6);
+    return 'S${p1.toRadixString(16).padLeft(3, '0')}${p2.toRadixString(16)}${p3.toRadixString(16)}';
+  }
+
   static SwuSignLayout? _parseSwu(String text) {
     final tokens = text.trim().split(RegExp(r'\s+'));
     if (tokens.isEmpty) return null;
@@ -107,7 +209,7 @@ class SwuParser {
     }
 
     final allSpatials = <SwuSpatial>[];
-    var currentX = 0;
+    var currentY = 0;
     var validWordCount = 0;
 
     for (final token in tokens) {
@@ -115,19 +217,24 @@ class SwuParser {
       if (layout == null || layout.isEmpty) continue;
 
       validWordCount++;
+      // Centraliza horizontalmente cada sinal na linha média X = 500
+      final signCenterX = (layout.minX + layout.maxX) / 2.0;
+      final dx = (500.0 - signCenterX).round();
+
       for (final s in layout.spatials) {
-        final shiftedX = currentX + (s.x - layout.minX);
+        final shiftedX = s.x + dx;
+        final shiftedY = currentY + (s.y - layout.minY);
         allSpatials.add(
           SwuSpatial(
             symbolId: s.symbolId,
             x: shiftedX,
-            y: s.y,
+            y: shiftedY,
             lineChar: s.lineChar,
             fillChar: s.fillChar,
           ),
         );
       }
-      currentX += layout.width + _wordGap;
+      currentY += layout.height + _wordGap;
     }
 
     if (allSpatials.isEmpty) return null;
@@ -239,7 +346,7 @@ class SwuParser {
     }
 
     final allSpatials = <SwuSpatial>[];
-    var currentX = 0;
+    var currentY = 0;
     var validWordCount = 0;
 
     for (final token in tokens) {
@@ -247,19 +354,24 @@ class SwuParser {
       if (layout == null || layout.isEmpty) continue;
 
       validWordCount++;
+      // Centraliza horizontalmente cada sinal na linha média X = 500
+      final signCenterX = (layout.minX + layout.maxX) / 2.0;
+      final dx = (500.0 - signCenterX).round();
+
       for (final s in layout.spatials) {
-        final shiftedX = currentX + (s.x - layout.minX);
+        final shiftedX = s.x + dx;
+        final shiftedY = currentY + (s.y - layout.minY);
         allSpatials.add(
           SwuSpatial(
             symbolId: s.symbolId,
             x: shiftedX,
-            y: s.y,
+            y: shiftedY,
             lineChar: s.lineChar,
             fillChar: s.fillChar,
           ),
         );
       }
-      currentX += layout.width + _wordGap;
+      currentY += layout.height + _wordGap;
     }
 
     if (allSpatials.isEmpty) return null;

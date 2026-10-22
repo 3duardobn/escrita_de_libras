@@ -49,9 +49,11 @@ class SignWritingCanvas extends StatelessWidget {
 
     if (interactive) {
       content = InteractiveViewer(
-        minScale: 0.5,
-        maxScale: 5.0,
-        boundaryMargin: const EdgeInsets.all(48),
+        minScale: 0.3,
+        maxScale: 6.0,
+        boundaryMargin: const EdgeInsets.all(80),
+        clipBehavior: Clip.none,
+        panAxis: PanAxis.free,
         child: content,
       );
     }

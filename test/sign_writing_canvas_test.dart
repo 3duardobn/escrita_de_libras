@@ -29,7 +29,7 @@ void main() {
     expect(find.byType(CustomPaint), findsWidgets);
   });
 
-  testWidgets('SignWritingImage ativa rolagem horizontal para frases compostas', (tester) async {
+  testWidgets('SignWritingImage renderiza sinal composto com zoom out completo e badge', (tester) async {
     const swuBrasilFrase =
         '𝠃𝥀𝤩\u{4005a}𝣩𝣤\u{40052}𝤈𝣤\u{47715}𝤩𝣯\u{476e3}𝤞𝤎\u{461e1}𝤂𝤝\u{476fb}𝣍𝤍\u{47717}𝣍𝣯 '
         '𝠃𝤺𝤲\u{40052}𝤉𝣛\u{4005a}𝣧𝣜\u{47024}𝤐𝤏\u{47714}𝤤𝣲\u{47036}𝣥𝤐\u{4771c}𝣓𝣲\u{461e1}𝤁𝤧 '
@@ -59,7 +59,7 @@ void main() {
 
     await tester.pump();
     expect(find.byType(SignWritingImage), findsOneWidget);
-    expect(find.byType(SingleChildScrollView), findsOneWidget);
+    expect(find.byType(SignWritingCanvas), findsOneWidget);
     expect(find.text('5 sinais'), findsOneWidget);
   });
 }
