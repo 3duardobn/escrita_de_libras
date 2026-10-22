@@ -26,7 +26,7 @@ class SwuSpatial {
   final String fillChar;
 }
 
-/// Layout espacial completo de um sinal decodificado.
+/// Layout espacial completo de um sinal ou sequência de sinais (SignText) decodificado.
 class SwuSignLayout {
   const SwuSignLayout({
     required this.raw,
@@ -35,6 +35,7 @@ class SwuSignLayout {
     required this.maxX,
     required this.maxY,
     required this.spatials,
+    this.wordCount = 1,
   });
 
   final String raw;
@@ -44,9 +45,16 @@ class SwuSignLayout {
   final int maxY;
   final List<SwuSpatial> spatials;
 
+  /// Quantidade de palavras/sinais distintos nesta sequência.
+  final int wordCount;
+
   int get width => math.max(1, maxX - minX);
   int get height => math.max(1, maxY - minY);
+  double get aspectRatio => width / height;
   bool get isEmpty => spatials.isEmpty;
+
+  /// Indica se é uma sequência longa ou sinal composto que requer rolagem horizontal.
+  bool get isMultiSign => wordCount > 1 || aspectRatio > 2.2;
 }
 
 /// Parser para SignWriting em Unicode (SWU) e Formal SignWriting em ASCII (FSW).
@@ -58,6 +66,8 @@ class SwuParser {
   static const int _coordBase = 0x1D80C;
   static const int _symbolMin = 0x40001;
   static const int _symbolMax = 0x4F480;
+
+  static const int _wordGap = 24;
 
   static final RegExp _fswPattern = RegExp(
     r'([BLMR])(\d{3})x(\d{3})((?:S[0-9a-f]{5}\d{3}x\d{3})*)',
@@ -89,6 +99,63 @@ class SwuParser {
   }
 
   static SwuSignLayout? _parseSwu(String text) {
+    final tokens = text.trim().split(RegExp(r'\s+'));
+    if (tokens.isEmpty) return null;
+
+    if (tokens.length == 1) {
+      return _parseSingleSwu(tokens.first);
+    }
+
+    final allSpatials = <SwuSpatial>[];
+    var currentX = 0;
+    var validWordCount = 0;
+
+    for (final token in tokens) {
+      final layout = _parseSingleSwu(token);
+      if (layout == null || layout.isEmpty) continue;
+
+      validWordCount++;
+      for (final s in layout.spatials) {
+        final shiftedX = currentX + (s.x - layout.minX);
+        allSpatials.add(
+          SwuSpatial(
+            symbolId: s.symbolId,
+            x: shiftedX,
+            y: s.y,
+            lineChar: s.lineChar,
+            fillChar: s.fillChar,
+          ),
+        );
+      }
+      currentX += layout.width + _wordGap;
+    }
+
+    if (allSpatials.isEmpty) return null;
+
+    var minX = allSpatials.first.x;
+    var maxX = allSpatials.first.x + 30;
+    var minY = allSpatials.first.y;
+    var maxY = allSpatials.first.y + 30;
+
+    for (final s in allSpatials) {
+      if (s.x < minX) minX = s.x;
+      if (s.y < minY) minY = s.y;
+      if (s.x + 30 > maxX) maxX = s.x + 30;
+      if (s.y + 30 > maxY) maxY = s.y + 30;
+    }
+
+    return SwuSignLayout(
+      raw: text,
+      minX: minX,
+      minY: minY,
+      maxX: maxX,
+      maxY: maxY,
+      spatials: allSpatials,
+      wordCount: validWordCount,
+    );
+  }
+
+  static SwuSignLayout? _parseSingleSwu(String text) {
     final runes = text.runes.toList(growable: false);
     if (runes.isEmpty) return null;
 
@@ -116,7 +183,7 @@ class SwuParser {
     var i = spatialsStart;
     while (i < runes.length) {
       final r = runes[i];
-      // Verifica se é um símbolo ISWA 2010
+      // Verifica se é um símbolo ISWA 2010 (inclui pontuação 0x4F2A1..0x4F480)
       if (r >= _symbolMin && r <= _symbolMax) {
         if (i + 2 < runes.length) {
           final x = _swuCoord(runes[i + 1]);
@@ -142,13 +209,12 @@ class SwuParser {
 
     var minX = spatials.first.x;
     var minY = spatials.first.y;
-    var maxX = rawMaxX;
-    var maxY = rawMaxY;
+    var maxX = boxIndex != -1 ? rawMaxX : spatials.first.x + 30;
+    var maxY = boxIndex != -1 ? rawMaxY : spatials.first.y + 30;
 
     for (final s in spatials) {
       if (s.x < minX) minX = s.x;
       if (s.y < minY) minY = s.y;
-      // Garante margem para o tamanho do glifo (base ~30px)
       if (s.x + 30 > maxX) maxX = s.x + 30;
       if (s.y + 30 > maxY) maxY = s.y + 30;
     }
@@ -160,16 +226,79 @@ class SwuParser {
       maxX: maxX,
       maxY: maxY,
       spatials: spatials,
+      wordCount: 1,
     );
   }
 
   static SwuSignLayout? _parseFsw(String text) {
-    final match = _fswPattern.firstMatch(text);
-    if (match == null) return null;
+    final tokens = text.trim().split(RegExp(r'\s+'));
+    if (tokens.isEmpty) return null;
 
-    final rawMaxX = int.tryParse(match.group(2) ?? '') ?? 500;
-    final rawMaxY = int.tryParse(match.group(3) ?? '') ?? 500;
-    final spatialsPart = match.group(4) ?? '';
+    if (tokens.length == 1) {
+      return _parseSingleFsw(tokens.first);
+    }
+
+    final allSpatials = <SwuSpatial>[];
+    var currentX = 0;
+    var validWordCount = 0;
+
+    for (final token in tokens) {
+      final layout = _parseSingleFsw(token);
+      if (layout == null || layout.isEmpty) continue;
+
+      validWordCount++;
+      for (final s in layout.spatials) {
+        final shiftedX = currentX + (s.x - layout.minX);
+        allSpatials.add(
+          SwuSpatial(
+            symbolId: s.symbolId,
+            x: shiftedX,
+            y: s.y,
+            lineChar: s.lineChar,
+            fillChar: s.fillChar,
+          ),
+        );
+      }
+      currentX += layout.width + _wordGap;
+    }
+
+    if (allSpatials.isEmpty) return null;
+
+    var minX = allSpatials.first.x;
+    var maxX = allSpatials.first.x + 30;
+    var minY = allSpatials.first.y;
+    var maxY = allSpatials.first.y + 30;
+
+    for (final s in allSpatials) {
+      if (s.x < minX) minX = s.x;
+      if (s.y < minY) minY = s.y;
+      if (s.x + 30 > maxX) maxX = s.x + 30;
+      if (s.y + 30 > maxY) maxY = s.y + 30;
+    }
+
+    return SwuSignLayout(
+      raw: text,
+      minX: minX,
+      minY: minY,
+      maxX: maxX,
+      maxY: maxY,
+      spatials: allSpatials,
+      wordCount: validWordCount,
+    );
+  }
+
+  static SwuSignLayout? _parseSingleFsw(String text) {
+    final match = _fswPattern.firstMatch(text);
+
+    int rawMaxX = 500;
+    int rawMaxY = 500;
+    String spatialsPart = text;
+
+    if (match != null) {
+      rawMaxX = int.tryParse(match.group(2) ?? '') ?? 500;
+      rawMaxY = int.tryParse(match.group(3) ?? '') ?? 500;
+      spatialsPart = match.group(4) ?? '';
+    }
 
     final spatials = <SwuSpatial>[];
     for (final sm in _fswSpatialPattern.allMatches(spatialsPart)) {
@@ -199,8 +328,8 @@ class SwuParser {
 
     var minX = spatials.first.x;
     var minY = spatials.first.y;
-    var maxX = rawMaxX;
-    var maxY = rawMaxY;
+    var maxX = match != null ? rawMaxX : spatials.first.x + 30;
+    var maxY = match != null ? rawMaxY : spatials.first.y + 30;
 
     for (final s in spatials) {
       if (s.x < minX) minX = s.x;
@@ -216,6 +345,7 @@ class SwuParser {
       maxX: maxX,
       maxY: maxY,
       spatials: spatials,
+      wordCount: 1,
     );
   }
 

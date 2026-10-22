@@ -10,7 +10,9 @@ void main() {
 
       final layout = SwuParser.parse(swuRato);
       expect(layout, isNotNull);
-      expect(layout!.spatials.length, 4);
+      expect(layout!.wordCount, 1);
+      expect(layout.isMultiSign, isFalse);
+      expect(layout.spatials.length, 4);
 
       // Símbolo 1: 0x4c005 -> id: 0xc005 = 49157 em (482, 483)
       final s1 = layout.spatials[0];
@@ -39,6 +41,31 @@ void main() {
       expect(layout.minY, 483);
       expect(layout.width, greaterThanOrEqualTo(70));
       expect(layout.height, greaterThanOrEqualTo(50));
+    });
+
+    test('parseia frase composta com múltiplos sinais (SignText de "brasil")', () {
+      // Entrada real do banco SQLite para o sinal 22290 ("brasil"), que contém 5 palavras
+      const swuBrasilFrase =
+          '𝠃𝥀𝤩\u{4005a}𝣩𝣤\u{40052}𝤈𝣤\u{47715}𝤩𝣯\u{476e3}𝤞𝤎\u{461e1}𝤂𝤝\u{476fb}𝣍𝤍\u{47717}𝣍𝣯 '
+          '𝠃𝤺𝤲\u{40052}𝤉𝣛\u{4005a}𝣧𝣜\u{47024}𝤐𝤏\u{47714}𝤤𝣲\u{47036}𝣥𝤐\u{4771c}𝣓𝣲\u{461e1}𝤁𝤧 '
+          '𝠃𝤵𝤲\u{40052}𝤉𝣚\u{4005a}𝣦𝣚\u{4942d}𝤡𝣴\u{49435}𝣘𝣶\u{461e1}𝤁𝤧 '
+          '𝠃𝤱𝤑\u{459c1}𝣜𝤂\u{4942b}𝤅𝣻 '
+          '𝠃𝤫𝤯\u{45951}𝤇𝣫\u{45b99}𝣥𝣸\u{46c75}𝤑𝣟\u{46c75}𝣡𝣝\u{4b5a3}𝣴𝤒';
+
+      final layout = SwuParser.parse(swuBrasilFrase);
+      expect(layout, isNotNull);
+      expect(layout!.wordCount, 5);
+      expect(layout.isMultiSign, isTrue);
+      expect(layout.spatials.length, 26);
+
+      // As palavras não estão sobrepostas: cada palavra subsequente é deslocada horizontalmente
+      expect(layout.width, greaterThan(400));
+      expect(layout.aspectRatio, greaterThan(3.0));
+
+      // O último símbolo da última palavra está bem à direita do primeiro símbolo
+      final firstX = layout.spatials.first.x;
+      final lastX = layout.spatials.last.x;
+      expect(lastX, greaterThan(firstX + 300));
     });
 
     test('parseia FSW em formato ASCII', () {

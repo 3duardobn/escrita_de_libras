@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
@@ -89,17 +90,87 @@ class _SignWritingImageState extends State<SignWritingImage> {
     Widget body;
 
     if (_layout != null && !_layout!.isEmpty) {
-      // 1. Renderização nativa e offline com fontes TrueType
-      body = Padding(
-        padding: widget.padding,
-        child: SignWritingCanvas(
-          layout: _layout!,
-          lineColor: lineColor,
-          fillColor: fillColor,
-          interactive: widget.interactive,
-          padding: EdgeInsets.zero,
-        ),
+      final isWide = _layout!.isMultiSign;
+      final availH = math.max(40.0, widget.height - widget.padding.vertical);
+      final heightScale = availH / _layout!.height;
+      final naturalWidth = math.max(availH, _layout!.width * heightScale);
+
+      final canvas = SignWritingCanvas(
+        layout: _layout!,
+        lineColor: lineColor,
+        fillColor: fillColor,
+        interactive: widget.interactive,
+        padding: EdgeInsets.zero,
       );
+
+      if (isWide && !widget.interactive) {
+        // Frase longa ou sinal composto em lista: rolagem horizontal mantendo glifos nítidos
+        body = Stack(
+          children: [
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              physics: const BouncingScrollPhysics(),
+              padding: EdgeInsets.symmetric(
+                horizontal: widget.padding.left,
+                vertical: widget.padding.top,
+              ),
+              child: SizedBox(
+                width: naturalWidth,
+                height: availH,
+                child: canvas,
+              ),
+            ),
+            Positioned(
+              top: 6,
+              right: 6,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                decoration: BoxDecoration(
+                  color: isDark
+                      ? const Color(0xCC111418)
+                      : const Color(0xEEFFFFFF),
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(
+                    color: isDark
+                        ? const Color(0xFF3B414A)
+                        : const Color(0xFFDCD5CA),
+                  ),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.swipe_outlined,
+                      size: 11,
+                      color: isDark
+                          ? const Color(0xFFA9B0B8)
+                          : const Color(0xFF64676C),
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      _layout!.wordCount > 1
+                          ? '${_layout!.wordCount} sinais'
+                          : 'frase',
+                      style: TextStyle(
+                        fontSize: 9.5,
+                        fontWeight: FontWeight.w500,
+                        color: isDark
+                            ? const Color(0xFFA9B0B8)
+                            : const Color(0xFF64676C),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        );
+      } else {
+        body = Padding(
+          padding: widget.padding,
+          child: canvas,
+        );
+      }
     } else if (!widget.entry.hasImage) {
       // 2. Sinal explicitamente sem desenho
       body = const _ImageMessage(
