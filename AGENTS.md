@@ -35,6 +35,17 @@ python -m tools.signpuddle.download_images --all --into-db   # offline opcional
 python -m unittest discover -s tools/signpuddle/tests -v
 ```
 
+## CI/CD
+
+- `.github/workflows/ci.yml` roda `flutter analyze`, `flutter test` e os testes
+  Python em pushes na `main`, pull requests e execução manual.
+- `.github/workflows/build-release.yml` roda em tags `v*` (e manualmente): gera
+  APK split por ABI, APK universal e AAB, verifica a assinatura e cria o
+  GitHub Release.
+- Assinatura de release via secrets `KEYSTORE_BASE64`, `KEYSTORE_PASSWORD`,
+  `KEY_ALIAS` e `KEY_PASSWORD` (sem eles cai na chave de debug). Guia:
+  `docs/RELEASE.md`.
+
 ## Regras importantes
 
 - **Exclusividade para Libras**: O projeto é estritamente limitado ao

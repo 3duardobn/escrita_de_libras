@@ -5,6 +5,17 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
 }
 
+val ksStorePath = System.getenv("KEYSTORE_PATH")
+val ksStorePassword = System.getenv("KEYSTORE_PASSWORD")
+val ksKeyAlias = System.getenv("KEY_ALIAS")
+val ksKeyPassword = System.getenv("KEY_PASSWORD")
+
+val hasReleaseKeystore =
+    !ksStorePath.isNullOrBlank() &&
+    !ksStorePassword.isNullOrBlank() &&
+    !ksKeyAlias.isNullOrBlank() &&
+    !ksKeyPassword.isNullOrBlank()
+
 android {
     namespace = "dev.edbn.escrita_de_libras"
     compileSdk = flutter.compileSdkVersion
@@ -30,11 +41,25 @@ android {
         versionName = flutter.versionName
     }
 
+    signingConfigs {
+        if (hasReleaseKeystore) {
+            create("release") {
+                storeFile = file(ksStorePath)
+                storePassword = ksStorePassword
+                keyAlias = ksKeyAlias
+                keyPassword = ksKeyPassword
+            }
+        }
+    }
+
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("debug")
+            if (hasReleaseKeystore) {
+                signingConfig = signingConfigs.getByName("release")
+            } else {
+                // Falls back to debug signing so `flutter run --release` still works locally.
+                signingConfig = signingConfigs.getByName("debug")
+            }
         }
     }
 }

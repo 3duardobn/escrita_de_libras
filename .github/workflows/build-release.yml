@@ -1,0 +1,146 @@
+name: Build and Release APK
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build APK and AAB
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: "3.41.7"
+          cache: true
+
+      - name: Enable Android SDK cmdline tools
+        uses: android-actions/setup-android@v3
+
+      - name: Check tag matches pubspec version
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          TAG="${GITHUB_REF_NAME#v}"
+          PUBSPEC=$(sed -n 's/^version: \([0-9.]*\)+.*/\1/p' pubspec.yaml)
+          if [ -z "$PUBSPEC" ]; then
+            echo "::error::Could not read version from pubspec.yaml."
+            exit 1
+          fi
+          if [ "$TAG" != "$PUBSPEC" ]; then
+            echo "::error::Tag v$TAG does not match pubspec.yaml version $PUBSPEC — update pubspec.yaml (and bump the +N build number) before tagging."
+            exit 1
+          fi
+
+      - name: Resolve artifact version
+        run: |
+          if [ "$GITHUB_REF_TYPE" = "tag" ]; then
+            VERSION="$GITHUB_REF_NAME"
+          else
+            BASE_VERSION=$(sed -n 's/^version: \([0-9.]*\)+.*/\1/p' pubspec.yaml)
+            if [ -z "$BASE_VERSION" ]; then
+              echo "::error::Could not read version from pubspec.yaml."
+              exit 1
+            fi
+            VERSION="v${BASE_VERSION}-dev.${GITHUB_RUN_NUMBER}"
+          fi
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+          echo "Building $VERSION"
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Analyze
+        run: flutter analyze
+
+      - name: Test
+        run: flutter test
+
+      # Release signing: set the repository secrets KEYSTORE_BASE64
+      # (base64 of the .jks), KEYSTORE_PASSWORD, KEY_ALIAS and KEY_PASSWORD.
+      # Without them the build falls back to debug signing (APKs still built,
+      # but not suitable for Play Store upload).
+      - name: Decode keystore
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          if [ -n "$KEYSTORE_BASE64" ]; then
+            echo "$KEYSTORE_BASE64" | base64 -d > "$GITHUB_WORKSPACE/keystore.jks"
+            echo "KEYSTORE_PATH=$GITHUB_WORKSPACE/keystore.jks" >> "$GITHUB_ENV"
+            echo "KEYSTORE_PASSWORD=$KEYSTORE_PASSWORD" >> "$GITHUB_ENV"
+            echo "KEY_ALIAS=$KEY_ALIAS" >> "$GITHUB_ENV"
+            echo "KEY_PASSWORD=$KEY_PASSWORD" >> "$GITHUB_ENV"
+          else
+            echo "::warning::KEYSTORE_BASE64 secret is not set; release will be signed with the debug key."
+          fi
+
+      - name: Build APK (split per ABI)
+        run: flutter build apk --release --split-per-abi
+
+      - name: Build APK (universal)
+        run: flutter build apk --release
+
+      - name: Build AAB (release)
+        run: flutter build appbundle --release
+
+      - name: Stage release artifacts
+        run: |
+          mkdir -p dist
+          for apk in build/app/outputs/flutter-apk/app-*-release.apk; do
+            arch=$(basename "$apk" | sed -E 's/^app-(.*)-release\.apk$/\1/')
+            cp "$apk" "dist/escrita_de_libras-${VERSION}-${arch}.apk"
+          done
+          cp build/app/outputs/flutter-apk/app-release.apk \
+             "dist/escrita_de_libras-${VERSION}-universal.apk"
+          cp build/app/outputs/bundle/release/app-release.aab \
+             "dist/escrita_de_libras-${VERSION}.aab"
+          sha256sum dist/* > dist/SHA256SUMS.txt
+          ls -lh dist
+
+      - name: Verify APK signatures
+        run: |
+          APKSIGNER="$ANDROID_HOME/build-tools/$(ls "$ANDROID_HOME/build-tools" | sort -V | tail -n1)/apksigner"
+          for apk in dist/*.apk; do
+            echo "::group::$apk"
+            "$APKSIGNER" verify --verbose --print-certs "$apk"
+            echo "::endgroup::"
+          done
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-artifacts
+          path: dist/*
+          if-no-files-found: error
+
+      - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          name: Escrita de Libras ${{ github.ref_name }}
+          generate_release_notes: true
+          files: dist/*

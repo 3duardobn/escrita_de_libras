@@ -44,6 +44,9 @@ app.*.map.json
 /android/app/profile
 /android/app/release
 
+# Release staging directory used by the CI workflow
+/dist/
+
 # Python tooling
 __pycache__/
 *.py[cod]

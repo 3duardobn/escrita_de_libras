@@ -144,6 +144,31 @@ python -m unittest discover -s tools/signpuddle/tests -v
 
 ---
 
+## Build e Release
+
+```bash
+# APK universal (todas as ABIs em um arquivo)
+flutter build apk --release
+
+# APKs separados por ABI (menores) + App Bundle
+flutter build apk --release --split-per-abi
+flutter build appbundle --release
+```
+
+O CI/CD fica em `.github/workflows/`:
+
+- `ci.yml` — análise estática e testes (Flutter + tooling Python) em pushes na
+  `main`, pull requests e execução manual.
+- `build-release.yml` — em tags `v*` (ou execução manual) gera APKs por ABI,
+  APK universal e AAB, verifica a assinatura e publica no GitHub Release.
+
+A assinatura de release usa os secrets `KEYSTORE_BASE64`,
+`KEYSTORE_PASSWORD`, `KEY_ALIAS` e `KEY_PASSWORD`. O guia completo (geração do
+keystore, fluxo de tag e envio à Play Store) está em
+[docs/RELEASE.md](docs/RELEASE.md).
+
+---
+
 ## Plataformas Suportadas
 
 - **Android**: Suporte completo (validado em hardware real).
