@@ -1,5 +1,8 @@
 # Escrita de Libras
 
+[![License: GPL-3.0](https://img.shields.io/badge/Licença-GPL--3.0-blue.svg)](LICENSE)
+[![0rwx: x](https://img.shields.io/badge/0rwx-x%20%7C%20execute-critical?style=flat-square)](https://0rwx.com)
+
 App Flutter (Dart 3) para pesquisa e estudo de sinais de **Libras (Língua Brasileira de Sinais)** com desenho em **SignWriting**, utilizando o vocabulário público brasileiro consolidado do [SignPuddle 3](https://signpuddle.com/).
 
 O aplicativo funciona de forma **100% offline**: você digita uma palavra em português, o termo é localizado instantaneamente em um **SQLite local**, e o sinal em SignWriting é desenhado na tela de forma vetorial nativa e acelerada por GPU através das fontes TrueType oficiais do **Sutton SignWriting**, eliminando qualquer dependência de download de imagens ou conexão de rede.
@@ -182,6 +185,14 @@ keystore, fluxo de tag e envio à Play Store) está em
 Os sinais e metadados base têm origem no dicionário público `bzs-BR-dictionary-public` do projeto SignPuddle, idealizado por **Valerie Sutton** (SignWriting) e desenvolvido por **Steve Slevinski**. As fontes TrueType pertencem ao projeto oficial `@sutton-signwriting/font-ttf`.
 
 Cada verbete pertence aos colaboradores listados no campo de fonte (`source`). Este projeto não se responsabiliza pelo conteúdo linguístico, funcionando como ferramenta educacional para estudo de Libras.
+
+---
+
+## Transparência de IA (0rwx: x)
+
+Este projeto adota a classificação do **[Framework 0rwx](https://0rwx.com/)** no nível **x (Execute / "I curate")**.
+
+Desenvolvido em fluxo *vibe coding* com sistemas agênticos de IA. A arquitetura e código são gerados com assistência de modelos, cabendo ao mantenedor a curadoria de produto e a validação funcional e visual em dispositivos reais. Veja detalhes em [0rwx.md](0rwx.md).
 
 ---
 

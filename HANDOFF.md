@@ -208,3 +208,17 @@ adb -s RXCX804MPHD logcat -d | grep -iE "flutter|FATAL|AndroidRuntime"
 - Regras globais do usuário: nunca usar `rm`/`rm -rf` (usar `trash-put`), e
   `glab` no lugar de `git` para remotes no GitLab da empresa (não é o caso aqui,
   ainda não há git).
+
+---
+
+## 9. Próximos Passos e Fontes a Indexar
+
+Consulte o arquivo [`TODO.md`](TODO.md) para a lista detalhada de tarefas e fontes de dados planejadas.
+
+- **LibrasLab (`@LibrasLab`)**: Planejado para indexação de termos e vídeos de demonstração de sinais (~400 vídeos curtos no YouTube + sinalário web). O objetivo é enriquecer os metadados dos sinais existentes com links de vídeo e ampliar sinônimos de busca.
+- **Sinais diários de Libras (`@SinaisdiáriosdeLibras`)**: Dicionário em vídeo do Prof. Carlos Cristian com mais de 3.500 vídeos catalogados (1 sinal por vídeo, com playlists temáticas). Prioritário para vincular demonstrações em vídeo aos sinais do banco base.
+- **Carlos Cristian Libras (`@CarlosCristianLibras`)**: Canal principal com mais de 2.600 vídeos com foco em cursos, aulas de *SignWriting* / *SignPuddle* e estudos de vocabulário.
+- **Glossário Letras-Libras UFRJ (`@GlossarioLetras-LibrasUFRJ` / `@LetrasLibrasUFRJ`)**: Acervo acadêmico oficial da UFRJ com ~260 vídeos com glossários terminológicos formais (verbos, saudações, cores, termos escolares e acadêmicos).
+
+
+
